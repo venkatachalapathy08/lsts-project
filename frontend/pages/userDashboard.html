@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>User Dashboard</title>
+
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background: #f4f6f9;
+            margin: 0;
+            padding: 0;
+        }
+
+        .header {
+            background: #007bff;
+            color: white;
+            padding: 20px;
+        }
+
+        .header h1 {
+            margin: 0;
+        }
+
+        .header p {
+            margin: 8px 0 0;
+        }
+
+        .container {
+            width: 90%;
+            max-width: 900px;
+            margin: 25px auto;
+        }
+
+        .card {
+            background: white;
+            padding: 20px;
+            margin-bottom: 20px;
+            border-radius: 10px;
+            box-shadow: 0 0 10px rgba(0,0,0,0.08);
+        }
+
+        h2 {
+            margin-top: 0;
+            color: #333;
+        }
+
+        input, textarea {
+            width: 100%;
+            padding: 10px;
+            margin: 8px 0 15px;
+            box-sizing: border-box;
+            border: 1px solid #ccc;
+            border-radius: 6px;
+        }
+
+        textarea {
+            resize: vertical;
+            min-height: 100px;
+        }
+
+        button {
+            padding: 10px 16px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            color: white;
+            background: #007bff;
+        }
+
+        button:hover {
+            background: #0056b3;
+        }
+
+        .logout-btn {
+            background: #dc3545;
+            margin-top: 10px;
+        }
+
+        .logout-btn:hover {
+            background: #b02a37;
+        }
+
+        .complaint-box {
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            padding: 15px;
+            margin-bottom: 15px;
+            background: #fafafa;
+        }
+
+        .complaint-box h3 {
+            margin: 0 0 10px;
+            color: #222;
+        }
+
+        .complaint-box p {
+            margin: 6px 0;
+        }
+
+        .top-actions {
+            display: flex;
+            gap: 10px;
+            margin-top: 15px;
+            flex-wrap: wrap;
+        }
+
+        #message {
+            margin-top: 10px;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+
+<div class="header">
+    <h1>User Dashboard</h1>
+    <p>Welcome, <span id="userName">User</span></p>
+</div>
+
+<div class="container">
+
+    <div class="card">
+        <h2>Create New Complaint</h2>
+
+        <form id="complaintForm">
+            <label><input type="text" id="title" placeholder="Complaint Title" required></label>
+            <label><textarea id="description" placeholder="Complaint Description" required></textarea></label>
+
+            <div class="top-actions">
+                <button type="submit">Submit Complaint</button>
+            </div>
+        </form>
+
+        <div id="message"></div>
+    </div>
+
+    <div class="card">
+        <h2>View My Complaints</h2>
+        <div id="complaints"></div>
+    </div>
+
+    <button type="button" class="logout-btn" onclick="logout()">Logout</button>
+</div>
+
+<script>
+    const token = localStorage.getItem("token");
+    const role = localStorage.getItem("role");
+    const storedUserName = localStorage.getItem("userName");
+
+    if (!token) {
+        alert("Please login first");
+        window.location.href = "login.html";
+    }
+
+    if (role && role !== "USER") {
+        alert("Access denied");
+        window.location.href = "login.html";
+    }
+
+    const userNameElement = document.getElementById("userName");
+    const message = document.getElementById("message");
+    const complaintsContainer = document.getElementById("complaints");
+    const complaintForm = document.getElementById("complaintForm");
+
+    if (storedUserName) {
+        userNameElement.innerText = storedUserName;
+    }
+
+    function createComplaintCard(c) {
+        return `
+            <div class="complaint-box">
+                <h3>${c.title}</h3>
+                <p><b>Description:</b> ${c.description}</p>
+                <p><b>Status:</b> ${c.status}</p>
+                <p><b>Created At:</b> ${c.complaintCreatedAt ?? "-"}</p>
+            </div>
+        `;
+    }
+
+    async function loadComplaints() {
+        try {
+            const response = await fetch("http://localhost:8080/api/complaints/my", {
+                method: "GET",
+                headers: {
+                    "Authorization": "Bearer " + token
+                }
+            });
+
+            if (!response.ok) {
+                const errorText = await response.text();
+                throw new Error(errorText || "Failed to load complaints");
+            }
+
+            const data = await response.json();
+            complaintsContainer.innerHTML = "";
+
+            if (!storedUserName && data.length > 0 && data[0].userName) {
+                userNameElement.innerText = data[0].userName;
+            }
+
+            if (data.length === 0) {
+                complaintsContainer.innerHTML = "<p>No complaints found.</p>";
+                return;
+            }
+
+            data.forEach(c => {
+                complaintsContainer.innerHTML += createComplaintCard(c);
+            });
+
+        } catch (error) {
+            console.error("Load complaints error:", error);
+            alert("Failed to load complaints: " + error.message);
+        }
+    }
+
+    complaintForm.addEventListener("submit", async function (e) {
+        e.preventDefault();
+
+        const title = document.getElementById("title").value.trim();
+        const description = document.getElementById("description").value.trim();
+
+        message.innerText = "";
+
+        try {
+            const response = await fetch("http://localhost:8080/api/complaints", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    "Authorization": "Bearer " + token
+                },
+                body: JSON.stringify({
+                    title: title,
+                    description: description
+                })
+            });
+
+            if (!response.ok) {
+                const errorText = await response.text();
+                throw new Error(errorText || "Failed to create complaint");
+            }
+
+            const createdComplaint = await response.json();
+
+            message.style.color = "green";
+            message.innerText = "Complaint created successfully";
+
+            complaintForm.reset();
+
+            if (complaintsContainer.innerHTML.includes("No complaints found.")) {
+                complaintsContainer.innerHTML = "";
+            }
+
+            complaintsContainer.innerHTML =
+                createComplaintCard(createdComplaint) + complaintsContainer.innerHTML;
+
+        } catch (error) {
+            console.error("Complaint create error:", error);
+            message.style.color = "red";
+            message.innerText = error.message;
+        }
+    });
+
+    function logout() {
+        localStorage.removeItem("token");
+        localStorage.removeItem("role");
+        localStorage.removeItem("userName");
+        window.location.href = "login.html";
+    }
+
+    setInterval(()=>{
+        loadComplaints();
+    },3000)
+</script>
+
+</body>
+</html>

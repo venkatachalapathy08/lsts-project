@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Dashboard</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background: #f4f6f9;
+        }
+
+        h1, h2 {
+            color: #333;
+        }
+
+        button {
+            padding: 8px 12px;
+            margin-bottom: 20px;
+            background: #007bff;
+            border: none;
+            color: white;
+            cursor: pointer;
+            border-radius: 5px;
+        }
+
+        button:hover {
+            background: #0056b3;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            background: white;
+            margin-bottom: 30px;
+        }
+
+        th, td {
+            border: 1px solid #ddd;
+            padding: 10px;
+            text-align: left;
+            vertical-align: middle;
+        }
+
+        th {
+            background: #007bff;
+            color: white;
+        }
+
+        select {
+            padding: 6px;
+        }
+
+        .action-btn {
+            background: green;
+            margin: 0;
+        }
+
+        .action-btn:hover {
+            background: darkgreen;
+        }
+    </style>
+</head>
+<body>
+
+<h1>Admin Dashboard</h1>
+
+<h2>All Users</h2>
+<table>
+    <thead>
+    <tr>
+        <th>User ID</th>
+        <th>Name</th>
+        <th>Email</th>
+        <th>Phone</th>
+        <th>Role</th>
+        <th>Action</th>
+    </tr>
+    </thead>
+    <tbody id="usersTableBody"></tbody>
+</table>
+
+<h2>All Complaints</h2>
+<table>
+    <thead>
+    <tr>
+        <th>Complaint ID</th>
+        <th>Title</th>
+        <th>Description</th>
+        <th>Current Status</th>
+        <th>User ID</th>
+        <th>User Name</th>
+        <th>New Status</th>
+        <th>Action</th>
+    </tr>
+    </thead>
+    <tbody id="complaintsTableBody"></tbody>
+</table>
+<button onclick="logout()">Logout</button>
+<script>
+    const token = localStorage.getItem("token");
+    const role = localStorage.getItem("role");
+
+    if (!token || role !== "ADMIN") {
+        alert("Access denied");
+        window.location.href = "login.html";
+    }
+
+    function logout() {
+        localStorage.removeItem("token");
+        localStorage.removeItem("role");
+        window.location.href = "login.html";
+    }
+
+    async function loadUsers() {
+        try {
+            const response = await fetch("http://localhost:8080/api/users", {
+                headers: {
+                    "Authorization": "Bearer " + token
+                }
+            });
+
+            if (!response.ok) {
+                throw new Error("Failed to load users");
+            }
+
+            const users = await response.json();
+            const tableBody = document.getElementById("usersTableBody");
+            tableBody.innerHTML = "";
+
+            users.forEach(user => {
+                tableBody.innerHTML += `
+                    <tr>
+                        <td>${user.userId}</td>
+                        <td>${user.name}</td>
+                        <td>${user.email}</td>
+                        <td>${user.phoneNumber}</td>
+                        <td>${user.role}</td>
+                        <td>
+                            <button class="remove-btn" onclick="deleteUser(${user.userId}, '${user.role}')">
+                                Remove
+                            </button>
+                        </td>
+                    </tr>
+                `;
+            });
+        } catch (error) {
+            console.error("Users load error:", error);
+        }
+    }
+
+    async function deleteUser(userId , userRole){
+        if(userRole==="ADMIN"){
+            alert("cannot delete ADMIN User");
+            return;
+        }
+
+        const confirmDelete=confirm("Are you sure to delete this user?");
+        if (!confirmDelete)
+            return;
+
+        try {
+            const response = await fetch(`http://localhost:8080/api/users/${userId}`, {
+                method: "DELETE",
+                headers: {
+                    "Authorization": "Bearer " + token
+                }
+            });
+
+            const result = await response.text();
+
+            if (!response.ok) {
+                throw new Error(result);
+            }
+
+            alert("User deleted successfully");
+            loadUsers();
+
+        } catch (error) {
+            console.error("Delete error:", error);
+            alert("Error: " + error.message);
+        }
+    }
+
+    async function loadComplaints() {
+        try {
+            const response = await fetch("http://localhost:8080/api/complaints", {
+                headers: {
+                    "Authorization": "Bearer " + token
+                }
+            });
+
+            if (!response.ok) {
+                throw new Error("Failed to load complaints");
+            }
+
+            const complaints = await response.json();
+            const tableBody = document.getElementById("complaintsTableBody");
+            tableBody.innerHTML = "";
+
+            complaints.forEach(c => {
+                tableBody.innerHTML += `
+                    <tr>
+                        <td>${c.complaintId}</td>
+                        <td>${c.title}</td>
+                        <td>${c.description}</td>
+                        <td>${c.status}</td>
+                        <td>${c.userId}</td>
+                        <td>${c.userName}</td>
+                        <td>
+                            <select id="status-${c.complaintId}">
+                                <option value="PENDING" ${c.status === "PENDING" ? "selected" : ""}>PENDING</option>
+                                <option value="IN_PROGRESS" ${c.status === "IN_PROGRESS" ? "selected" : ""}>IN_PROGRESS</option>
+                                <option value="COMPLETED" ${c.status === "COMPLETED" ? "selected" : ""}>COMPLETED</option>
+                            </select>
+                        </td>
+                        <td>
+                            <button class="action-btn" onclick="updateStatus(${c.complaintId})">Update</button>
+                        </td>
+                    </tr>
+                `;
+            });
+        } catch (error) {
+            console.error("Complaints load error:", error);
+        }
+    }
+
+    async function updateStatus(complaintId) {
+        const selectedStatus = document.getElementById(`status-${complaintId}`).value;
+
+        try {
+            const response = await fetch(`http://localhost:8080/api/complaints/${complaintId}/status?status=${selectedStatus}`, {
+                method: "PUT",
+                headers: {
+                    "Authorization": "Bearer " + token
+                }
+            });
+
+            const result = await response.text();
+
+            if (!response.ok) {
+                throw new Error(result || "Failed to update status");
+            }
+
+            alert("Status updated successfully");
+            await loadComplaints();
+
+        } catch (error) {
+            console.error("Status update error:", error);
+            alert("Error: " + error.message);
+        }
+    }
+    setInterval(async ()=>{
+        await loadComplaints();
+    },3000)
+
+    setInterval(async ()=>{
+        await loadUsers();
+    },3000)
+</script>
+
+</body>
+</html>
