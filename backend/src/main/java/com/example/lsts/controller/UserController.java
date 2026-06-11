@@ -36,7 +36,7 @@ public class UserController {
 
         UserResponseDTO response = userService.getUserById(id);
 
-        return ResponseEntity.ok(response);
+        return new ResponseEntity<>(response , HttpStatus.OK);
     }
 
     // ✅ Get All Users
