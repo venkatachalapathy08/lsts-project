@@ -1,7 +1,7 @@
 target/
 .idea/
-.vscode/
-*.iml
+.settings/
+.project
+.classpath
 *.log
-.DS_Store
-node_modules/
+application.properties
